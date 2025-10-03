@@ -1,0 +1,311 @@
+openapi: 3.0.3
+info:
+  title: Kanban Lite API
+  version: 0.1.0
+  description: Kanban Lite の最小API。認証なし。カーソル方式のページネーション。
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local
+
+tags:
+  - name: Tasks
+  - name: Labels
+  - name: Comments
+  - name: Upload
+
+paths:
+  /tasks:
+    get:
+      summary: タスク一覧
+      tags: [Tasks]
+      parameters:
+        - $ref: '#/components/parameters/q'
+        - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/labelId'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaginatedTasks' }
+    post:
+      summary: タスク作成
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /tasks/{id}:
+    get:
+      summary: タスク取得
+      tags: [Tasks]
+      parameters: [ { $ref: '#/components/parameters/taskId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      summary: タスク更新（部分更新、競合検出）
+      tags: [Tasks]
+      parameters: [ { $ref: '#/components/parameters/taskId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      summary: タスク削除
+      tags: [Tasks]
+      parameters: [ { $ref: '#/components/parameters/taskId' } ]
+      responses:
+        '204':
+          description: No Content
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /labels:
+    get:
+      summary: ラベル一覧
+      tags: [Labels]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Label' }
+    post:
+      summary: ラベル作成
+      tags: [Labels]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LabelCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Label' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /tasks/{id}/comments:
+    get:
+      summary: コメント一覧
+      tags: [Comments]
+      parameters: [ { $ref: '#/components/parameters/taskId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Comment' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      summary: コメント追加
+      tags: [Comments]
+      parameters: [ { $ref: '#/components/parameters/taskId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommentCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /upload:
+    post:
+      summary: 画像アップロード（1ファイル）
+      tags: [Upload]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+
+components:
+  parameters:
+    taskId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+      description: タスクID
+    q:
+      in: query
+      name: q
+      required: false
+      schema: { type: string, maxLength: 200 }
+      description: タイトル・本文の部分一致
+    status:
+      in: query
+      name: status
+      required: false
+      schema: { $ref: '#/components/schemas/Status' }
+    labelId:
+      in: query
+      name: labelId
+      required: false
+      schema: { type: string, format: uuid }
+    cursor:
+      in: query
+      name: cursor
+      required: false
+      schema: { type: string, nullable: true }
+      description: 次ページ取得用カーソル
+    limit:
+      in: query
+      name: limit
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Version conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Status:
+      type: string
+      enum: [Todo, InProgress, Done]
+    Task:
+      type: object
+      required: [id, title, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        status: { $ref: '#/components/schemas/Status' }
+        labelId: { type: string, format: uuid, nullable: true }
+        attachmentUrl: { type: string, format: uri, nullable: true }
+        version: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        labelId: { type: string, format: uuid }
+    TaskUpdate:
+      type: object
+      required: [version]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        status: { $ref: '#/components/schemas/Status' }
+        labelId: { type: string, format: uuid, nullable: true }
+        attachmentUrl: { type: string, format: uri, nullable: true }
+        version: { type: integer, minimum: 0 }
+    Label:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 50 }
+        color:
+          type: string
+          pattern: '^#([0-9a-fA-F]{6})$'
+    LabelCreate:
+      type: object
+      required: [name, color]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 50 }
+        color:
+          type: string
+          pattern: '^#([0-9a-fA-F]{6})$'
+    Comment:
+      type: object
+      required: [id, taskId, body, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        taskId: { type: string, format: uuid }
+        body: { type: string, minLength: 1, maxLength: 2000 }
+        createdAt: { type: string, format: date-time }
+    CommentCreate:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 2000 }
+    PaginatedTasks:
+      type: object
+      required: [items, cursor, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Task' }
+        cursor:
+          type: string
+          nullable: true
+          description: 次ページがある場合のみ値が入る
+        limit:
+          type: integer
+    Error:
+      type: object
+      required: [message]
+      properties:
+        code: { type: string, example: 'BAD_REQUEST' }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
